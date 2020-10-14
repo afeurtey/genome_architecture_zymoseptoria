@@ -1,0 +1,32 @@
+
+#  -----------------------------
+#   Detecting telomeric repeats
+#  -----------------------------
+
+${bowtie_dir}bowtie2-build ${work_dir}${polished_fasta} ${work_dir}${polished_fasta%.fasta}
+
+${bowtie_dir}bowtie2 \
+  -x ${work_dir}${polished_fasta%.fasta} \
+  -c CCCTAA \
+  --all \
+  --threads 4 \
+  | grep -v "@" | sort  -k 3 -nk 4  \
+ > ${work_dir}${telom_fn}.txt
+
+#Conversion from bowtie output format to bed format
+awk 'BEGIN {FS= "\t"; OFS="\t"} {print $3, $4, $4+length($5), $1, 111, $2}' ${work_dir}${telom_fn}.txt \
+ > ${work_dir}${telom_fn}.bed
+
+bedtools sort -i ${work_dir}${telom_fn}.bed > ${work_dir}${telom_fn}_sorted.bed
+
+#Merge repeats closer than the length of 1 (in case one repeat is mutated or has a sequencing error, likely at the contig end since the coverage depth drops)
+bedtools merge -i ${work_dir}${telom_fn}_sorted.bed -d 7 \
+ > ${work_dir}${telom_fn}_sorted_merged.bed
+
+#Keep only blocks of more than 10 repeats (so longer than 60)
+awk 'BEGIN {FS= "\t"; OFS="\t"} {diff=($3 - $2); if (diff > 60) print $1,$2,$3,diff} ' \
+   ${work_dir}${telom_fn}_sorted_merged.bed \
+   > ${work_dir}${telom_fn}_sorted_merged_long.bed
+
+done
+
